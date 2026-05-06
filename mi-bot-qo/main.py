@@ -27,7 +27,7 @@ bot = MyBot()
 # --- CONFIGURACIÓN ---
 ID_CANAL_CREADOR = 1500872439943532699 
 ID_CANAL_SUGERENCIAS = 1501564312265687213
-canales_activos = []
+# ¡Adiós a canales_activos = []! Ya no lo necesitamos.
 
 @bot.event
 async def on_message(message):
@@ -46,27 +46,48 @@ async def on_message(message):
 
 @bot.event
 async def on_voice_state_update(member, before, after):
+    # 1. LÓGICA DE CREACIÓN
     if after.channel and after.channel.id == ID_CANAL_CREADOR:
         guild = member.guild
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(connect=True),
             member: discord.PermissionOverwrite(manage_channels=True, manage_permissions=True, move_members=True, mute_members=True)
         }
-        nuevo_canal = await guild.create_voice_channel(name=f"🎙️ Sala de {member.name}", category=after.channel.category, overwrites=overwrites)
+        nuevo_canal = await guild.create_voice_channel(
+            name=f"🎙️ Sala de {member.name}", 
+            category=after.channel.category, 
+            overwrites=overwrites
+        )
         await member.move_to(nuevo_canal)
-        canales_activos.append(nuevo_canal.id)
 
-    if before.channel and before.channel.id in canales_activos:
-        if len(before.channel.members) == 0:
-            try:
-                await before.channel.delete()
-                canales_activos.remove(before.channel.id)
-            except:
-                pass
+    # 2. LÓGICA DE BORRADO (Sin listas, a prueba de reinicios)
+    if before.channel:
+        canal_creador = bot.get_channel(ID_CANAL_CREADOR)
+        # Comprobamos si sale de un canal que está en la misma categoría que el creador
+        if canal_creador and before.channel.category_id == canal_creador.category_id:
+            # Si se queda vacío y NO es el canal creador base
+            if len(before.channel.members) == 0 and before.channel.id != ID_CANAL_CREADOR:
+                try:
+                    await before.channel.delete()
+                except:
+                    pass
 
 @bot.event
 async def on_ready():
     print(f'🤖 Cromi System online.')
+    
+    # 3. LIMPIEZA AUTOMÁTICA AL ARRANCAR
+    canal_creador = bot.get_channel(ID_CANAL_CREADOR)
+    if canal_creador and canal_creador.category:
+        for canal in canal_creador.category.voice_channels:
+            # Borramos los canales vacíos de esa categoría que se hayan quedado huérfanos
+            if len(canal.members) == 0 and canal.id != ID_CANAL_CREADOR:
+                try:
+                    await canal.delete(reason="Limpieza automática al reiniciar")
+                    print(f"🧹 Canal huérfano '{canal.name}' eliminado.")
+                except:
+                    pass
+
     keep_alive()
 
 async def main():
