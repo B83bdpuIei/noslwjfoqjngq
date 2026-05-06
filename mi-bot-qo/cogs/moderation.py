@@ -9,7 +9,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(manage_messages=True)
     async def clear(self, ctx, cantidad: int):
         await ctx.channel.purge(limit=cantidad + 1)
-        await ctx.send(f"✅ Borrados {cantidad} mensajes.", delete_after=3)
+        await ctx.send(f"✅ Mensajes borrados: {cantidad}", delete_after=3)
 
 async def setup(bot):
     await bot.add_cog(Moderation(bot))
