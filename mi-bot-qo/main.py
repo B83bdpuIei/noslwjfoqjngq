@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import os
 import asyncio
 from keep_alive import keep_alive
@@ -11,83 +11,87 @@ class MyBot(commands.Bot):
         intents.members = True
         intents.guilds = True
         intents.voice_states = True 
-        super().__init__(command_prefix="!", intents=intents)
+        super().__init__(command_prefix=".", intents=intents)
 
     async def setup_hook(self):
-        # Carga de extensiones (Cogs)
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py') and not filename.startswith('__'):
                 try:
                     await self.load_extension(f'cogs.{filename[:-3]}')
-                    print(f'✅ Extensión cargada: {filename}')
                 except Exception as e:
                     print(f'❌ Error cargando {filename}: {e}')
-        
-        # Sincronización de comandos de barra (/)
         await self.tree.sync()
-        print("✅ Comandos / sincronizados.")
 
 bot = MyBot()
 
-# --- CONFIGURACIÓN DE CANALES DINÁMICOS ---
+# --- CONFIGURACIÓN ---
 ID_CANAL_CREADOR = 1500872439943532699 
+ID_CANAL_SUGERENCIAS = 1501564312265687213
 canales_activos = []
 
+@tasks.loop(hours=24)
+async def recordatorio_sugerencias():
+    canal = bot.get_channel(ID_CANAL_SUGERENCIAS)
+    if not canal:
+        return
+
+    # Revisar los últimos mensajes para ver si el recordatorio ya está ahí
+    ultimo_mensaje = None
+    async for msg in canal.history(limit=1):
+        ultimo_mensaje = msg
+
+    # Si el último mensaje es del bot y es el recordatorio, no hacemos nada
+    if ultimo_mensaje and ultimo_mensaje.author == bot.user:
+        if ultimo_mensaje.embeds and "💡 **¿Tienes alguna idea?**" in ultimo_mensaje.embeds[0].description:
+            return 
+
+    # Si no es el último mensaje, buscamos el recordatorio viejo para borrarlo
+    async for msg in canal.history(limit=50):
+        if msg.author == bot.user and msg.embeds:
+            if "💡 **¿Tienes alguna idea?**" in msg.embeds[0].description:
+                await msg.delete()
+                break # Solo borramos el más reciente que encontremos
+
+    # Enviamos el nuevo recordatorio para que quede abajo
+    embed = discord.Embed(
+        description="💡 **¿Tienes alguna idea?**\nUsa el comando `.suggest [tu sugerencia]` para enviar una propuesta al equipo.",
+        color=0x00BFFF
+    )
+    embed.set_footer(text="Cromi System • Info")
+    await canal.send(embed=embed)
+
+@bot.event
+async def on_ready():
+    print(f'🤖 Bot: {bot.user.name} online.')
+    if not recordatorio_sugerencias.is_running():
+        recordatorio_sugerencias.start()
+    keep_alive()
+
+# Eventos de voz
 @bot.event
 async def on_voice_state_update(member, before, after):
-    # 1. CREACIÓN: El usuario entra al canal generador
     if after.channel and after.channel.id == ID_CANAL_CREADOR:
         guild = member.guild
-        category = after.channel.category
-        
-        # Overwrites: Le damos permisos de Administrar Canal solo en SU sala
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(connect=True),
-            member: discord.PermissionOverwrite(
-                manage_channels=True, 
-                manage_permissions=True,
-                move_members=True, 
-                mute_members=True,
-                deafen_members=True
-            )
+            member: discord.PermissionOverwrite(manage_channels=True, manage_permissions=True, move_members=True, mute_members=True)
         }
-        
-        nuevo_canal = await guild.create_voice_channel(
-            name=f"🎙️ Sala de {member.name}",
-            category=category,
-            overwrites=overwrites
-        )
-        
+        nuevo_canal = await guild.create_voice_channel(name=f"🎙️ Sala de {member.name}", category=after.channel.category, overwrites=overwrites)
         await member.move_to(nuevo_canal)
         canales_activos.append(nuevo_canal.id)
 
-    # 2. LIMPIEZA: El canal se queda vacío
     if before.channel and before.channel.id in canales_activos:
         if len(before.channel.members) == 0:
             try:
                 await before.channel.delete()
                 canales_activos.remove(before.channel.id)
-            except discord.NotFound:
-                if before.channel.id in canales_activos:
-                    canales_activos.remove(before.channel.id)
-            except Exception as e:
-                print(f"Error al limpiar canal: {e}")
-
-@bot.event
-async def on_ready():
-    print(f'------------------------------------')
-    print(f'🤖 Bot: {bot.user.name}')
-    print(f'🟢 Estado: Online')
-    print(f'------------------------------------')
-    keep_alive()
+            except:
+                pass
 
 async def main():
     async with bot:
         token = os.getenv('DISCORD_TOKEN')
-        if token:
-            await bot.start(token)
-        else:
-            print("❌ ERROR: No se encontró DISCORD_TOKEN en las variables de entorno.")
+        await bot.start(token)
 
 if __name__ == '__main__':
     asyncio.run(main())
