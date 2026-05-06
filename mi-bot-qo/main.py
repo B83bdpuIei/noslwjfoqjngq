@@ -32,27 +32,17 @@ canales_activos = []
 @tasks.loop(hours=24)
 async def recordatorio_sugerencias():
     canal = bot.get_channel(ID_CANAL_SUGERENCIAS)
-    if not canal:
-        return
+    if not canal: return
 
-    # Revisar los últimos mensajes para ver si el recordatorio ya está ahí
-    ultimo_mensaje = None
     async for msg in canal.history(limit=1):
-        ultimo_mensaje = msg
-
-    # Si el último mensaje es del bot y es el recordatorio, no hacemos nada
-    if ultimo_mensaje and ultimo_mensaje.author == bot.user:
-        if ultimo_mensaje.embeds and "💡 **¿Tienes alguna idea?**" in ultimo_mensaje.embeds[0].description:
+        if msg.author == bot.user and msg.embeds and "💡 **¿Tienes alguna idea?**" in msg.embeds[0].description:
             return 
 
-    # Si no es el último mensaje, buscamos el recordatorio viejo para borrarlo
     async for msg in canal.history(limit=50):
-        if msg.author == bot.user and msg.embeds:
-            if "💡 **¿Tienes alguna idea?**" in msg.embeds[0].description:
-                await msg.delete()
-                break # Solo borramos el más reciente que encontremos
+        if msg.author == bot.user and msg.embeds and "💡 **¿Tienes alguna idea?**" in msg.embeds[0].description:
+            await msg.delete()
+            break
 
-    # Enviamos el nuevo recordatorio para que quede abajo
     embed = discord.Embed(
         description="💡 **¿Tienes alguna idea?**\nUsa el comando `.suggest [tu sugerencia]` para enviar una propuesta al equipo.",
         color=0x00BFFF
@@ -61,13 +51,27 @@ async def recordatorio_sugerencias():
     await canal.send(embed=embed)
 
 @bot.event
+async def on_message(message):
+    # Si el mensaje es en el canal de sugerencias y no es del bot
+    if message.channel.id == ID_CANAL_SUGERENCIAS and message.author != bot.user:
+        # Si no empieza por el comando .suggest, lo borramos
+        if not message.content.startswith(".suggest"):
+            try:
+                await message.delete()
+            except:
+                pass
+    
+    # IMPORTANTE: Procesar los comandos para que .suggest funcione
+    await bot.process_commands(message)
+
+@bot.event
 async def on_ready():
     print(f'🤖 Bot: {bot.user.name} online.')
     if not recordatorio_sugerencias.is_running():
         recordatorio_sugerencias.start()
     keep_alive()
 
-# Eventos de voz
+# Eventos de voz dinámicos (Sin cambios)
 @bot.event
 async def on_voice_state_update(member, before, after):
     if after.channel and after.channel.id == ID_CANAL_CREADOR:
