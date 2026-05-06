@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 import os
 import asyncio
 from keep_alive import keep_alive
@@ -29,49 +29,21 @@ ID_CANAL_CREADOR = 1500872439943532699
 ID_CANAL_SUGERENCIAS = 1501564312265687213
 canales_activos = []
 
-@tasks.loop(hours=24)
-async def recordatorio_sugerencias():
-    canal = bot.get_channel(ID_CANAL_SUGERENCIAS)
-    if not canal: return
-
-    async for msg in canal.history(limit=1):
-        if msg.author == bot.user and msg.embeds and "💡 **¿Tienes alguna idea?**" in msg.embeds[0].description:
-            return 
-
-    async for msg in canal.history(limit=50):
-        if msg.author == bot.user and msg.embeds and "💡 **¿Tienes alguna idea?**" in msg.embeds[0].description:
-            await msg.delete()
-            break
-
-    embed = discord.Embed(
-        description="💡 **¿Tienes alguna idea?**\nUsa el comando `.suggest [tu sugerencia]` para enviar una propuesta al equipo.",
-        color=0x00BFFF
-    )
-    embed.set_footer(text="Cromi System • Info")
-    await canal.send(embed=embed)
-
 @bot.event
 async def on_message(message):
-    # Si el mensaje es en el canal de sugerencias y no es del bot
-    if message.channel.id == ID_CANAL_SUGERENCIAS and message.author != bot.user:
-        # Si no empieza por el comando .suggest, lo borramos
+    if message.author == bot.user:
+        return
+
+    # Si escriben en el canal de sugerencias y no es el comando, borrar
+    if message.channel.id == ID_CANAL_SUGERENCIAS:
         if not message.content.startswith(".suggest"):
             try:
                 await message.delete()
             except:
                 pass
     
-    # IMPORTANTE: Procesar los comandos para que .suggest funcione
     await bot.process_commands(message)
 
-@bot.event
-async def on_ready():
-    print(f'🤖 Bot: {bot.user.name} online.')
-    if not recordatorio_sugerencias.is_running():
-        recordatorio_sugerencias.start()
-    keep_alive()
-
-# Eventos de voz dinámicos (Sin cambios)
 @bot.event
 async def on_voice_state_update(member, before, after):
     if after.channel and after.channel.id == ID_CANAL_CREADOR:
@@ -91,6 +63,11 @@ async def on_voice_state_update(member, before, after):
                 canales_activos.remove(before.channel.id)
             except:
                 pass
+
+@bot.event
+async def on_ready():
+    print(f'🤖 Cromi System online.')
+    keep_alive()
 
 async def main():
     async with bot:
