@@ -1,54 +1,39 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 import asyncio
 from keep_alive import keep_alive
 
-# --- Configuración ---
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.guilds = True
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.members = True
+        intents.guilds = True
+        super().__init__(command_prefix="!", intents=intents)
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+    async def setup_hook(self):
+        # Carga de Cogs
+        for filename in os.listdir('./cogs'):
+            if filename.endswith('.py') and not filename.startswith('__'):
+                await self.load_extension(f'cogs.{filename[:-3]}')
+        
+        # Sincroniza los comandos de barra (/) con Discord
+        await self.tree.sync()
+        print("✅ Comandos de barra sincronizados.")
 
-# Función global para el canal de notas
-async def log_to_private_channel(guild, content):
-    channel = discord.utils.get(guild.text_channels, name="bot-notas-privadas")
-    if not channel:
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            guild.me: discord.PermissionOverwrite(read_messages=True)
-        }
-        channel = await guild.create_text_channel('bot-notas-privadas', overwrites=overwrites)
-    await channel.send(content)
-
-# Inyectamos la función en el bot para que los Cogs la usen fácil
-bot.log_notes = log_to_private_channel
-
-async def load_extensions():
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py') and not filename.startswith('__'):
-            try:
-                await bot.load_extension(f'cogs.{filename[:-3]}')
-                print(f'✅ Cargado: {filename}')
-            except Exception as e:
-                print(f'❌ Error en {filename}: {e}')
+bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f'🤖 Bot online: {bot.user.name}')
-    await bot.change_presence(activity=discord.Game(name="!dashboard"))
+    print(f'🤖 {bot.user.name} está online.')
+    keep_alive()
 
 async def main():
     async with bot:
-        await load_extensions()
-        keep_alive() # Arranca el servidor web antes que el bot
         token = os.getenv('DISCORD_TOKEN')
-        if token:
-            await bot.start(token)
-        else:
-            print("❌ ERROR: Falta la variable DISCORD_TOKEN en Render")
+        await bot.start(token)
 
 if __name__ == '__main__':
     asyncio.run(main())
