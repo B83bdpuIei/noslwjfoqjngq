@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-import asyncio
 
 class Autoroles(commands.Cog):
     def __init__(self, bot):
@@ -17,59 +16,49 @@ class Autoroles(commands.Cog):
             "💜": 1501554569719844986
         }
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        await self.bot.wait_until_ready()
-        # Esperamos 5 segundos para que la mochila tenga tiempo de cargar los emojis
-        await asyncio.sleep(5)
-        await self.revisar_y_enviar_mensaje()
-
-    async def revisar_y_enviar_mensaje(self):
+    @commands.command(name="generar_colores")
+    @commands.has_permissions(administrator=True)
+    async def generar_colores(self, ctx):
         canal_destino = self.bot.get_channel(self.CANAL_ROLES)
         if not canal_destino:
-            print(f"❌ Autoroles: No encuentro el canal {self.CANAL_ROLES}")
+            await ctx.send(f"❌ Error: No encuentro el canal con ID {self.CANAL_ROLES}")
             return
 
-        # Comprueba si el mensaje ya existe para no enviarlo repetido
-        mensaje_existe = False
-        async for msg in canal_destino.history(limit=10):
-            if msg.author == self.bot.user and msg.embeds:
-                if "¡Elige tu color!" in msg.embeds[0].description:
-                    mensaje_existe = True
-                    break
+        # 1. Intentamos sacar el emoji de la mochila
+        mochila = self.bot.get_cog('EmojiManager')
+        emoji_obj = mochila.get_emoji("campage") if mochila else None
+        
+        # 2. Si la mochila falla, lo buscamos directamente en el servidor
+        if not emoji_obj:
+            emoji_obj = discord.utils.get(ctx.guild.emojis, name="campage")
 
-        # Si no existe, lo enviamos
-        if not mensaje_existe:
-            mochila = self.bot.get_cog('EmojiManager')
+        # 3. Si por algún motivo divino no existe, ponemos el escudo
+        emoji_campage = str(emoji_obj) if emoji_obj else "🛡️"
+
+        descripcion = (
+            f"{emoji_campage} **¡Elige tu color!**\n"
+            "Reacciona con el emoji del color que más te guste:\n\n"
+            "❤️ | Rojo\n"
+            "🧡 | Naranja\n"
+            "💛 | Amarillo\n"
+            "💚 | Verde\n"
+            "🩵 | Azul\n"
+            "🩷 | Rosa\n"
+            "💜 | Morado\n\n"
+            "Dale color a tu nombre y personalízate, hazte notar 🎨"
+        )
+
+        embed = discord.Embed(description=descripcion, color=discord.Color.orange())
+        embed.set_footer(text="Cromi System • Autoroles")
+
+        nuevo_msg = await canal_destino.send(embed=embed)
+
+        for emoji in self.roles_colores.keys():
+            await nuevo_msg.add_reaction(emoji)
             
-            # Intenta buscar el emoji por el nombre campage, o por los números de tu captura
-            emoji_obj = mochila.get_emoji("campage") if mochila else None
-            if not emoji_obj and mochila:
-                 emoji_obj = mochila.get_emoji("1483946140973011267")
-            
-            # Si por algún casual falla, pone un escudo para que el bot no crashee
-            emoji_campage = str(emoji_obj) if emoji_obj else "🛡️"
-
-            descripcion = (
-                f"{emoji_campage} **¡Elige tu color!**\n"
-                "Reacciona con el emoji del color que más te guste:\n\n"
-                "❤️ | Rojo\n"
-                "🧡 | Naranja\n"
-                "💛 | Amarillo\n"
-                "💚 | Verde\n"
-                "🩵 | Azul\n"
-                "🩷 | Rosa\n"
-                "💜 | Morado\n\n"
-                "Dale color a tu nombre y personalízate, hazte notar 🎨"
-            )
-
-            embed = discord.Embed(description=descripcion, color=discord.Color.orange())
-            embed.set_footer(text="Cromi System • Autoroles")
-
-            nuevo_msg = await canal_destino.send(embed=embed)
-
-            for emoji in self.roles_colores.keys():
-                await nuevo_msg.add_reaction(emoji)
+        await ctx.send("✅ Mensaje de colores generado.", delete_after=3)
+        try: await ctx.message.delete()
+        except: pass
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
