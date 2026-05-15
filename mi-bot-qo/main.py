@@ -27,7 +27,6 @@ bot = MyBot()
 # --- CONFIGURACIÓN ---
 ID_CANAL_CREADOR = 1500872439943532699 
 ID_CANAL_SUGERENCIAS = 1501564312265687213
-# ¡Adiós a canales_activos = []! Ya no lo necesitamos.
 
 @bot.event
 async def on_message(message):
@@ -60,12 +59,10 @@ async def on_voice_state_update(member, before, after):
         )
         await member.move_to(nuevo_canal)
 
-    # 2. LÓGICA DE BORRADO (Sin listas, a prueba de reinicios)
+    # 2. LÓGICA DE BORRADO
     if before.channel:
         canal_creador = bot.get_channel(ID_CANAL_CREADOR)
-        # Comprobamos si sale de un canal que está en la misma categoría que el creador
         if canal_creador and before.channel.category_id == canal_creador.category_id:
-            # Si se queda vacío y NO es el canal creador base
             if len(before.channel.members) == 0 and before.channel.id != ID_CANAL_CREADOR:
                 try:
                     await before.channel.delete()
@@ -80,7 +77,6 @@ async def on_ready():
     canal_creador = bot.get_channel(ID_CANAL_CREADOR)
     if canal_creador and canal_creador.category:
         for canal in canal_creador.category.voice_channels:
-            # Borramos los canales vacíos de esa categoría que se hayan quedado huérfanos
             if len(canal.members) == 0 and canal.id != ID_CANAL_CREADOR:
                 try:
                     await canal.delete(reason="Limpieza automática al reiniciar")
@@ -88,9 +84,9 @@ async def on_ready():
                 except:
                     pass
 
-    keep_alive()
-
 async def main():
+    # ✅ EL KEEP ALIVE ESTÁ AHORA AQUÍ. SE EJECUTA UNA SOLA VEZ AL ARRANCAR.
+    keep_alive()
     async with bot:
         token = os.getenv('DISCORD_TOKEN')
         await bot.start(token)
